@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.3.32804.467
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BacklightPlayground", "BacklightPlayground\BacklightPlayground.csproj", "{0FE325DA-0947-456D-B99A-43ADC88CE7A0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BacklightLibrary", "BacklightLibrary\BacklightLibrary.csproj", "{8AC6C76D-85B8-453C-90AA-793E3C8A5AB7}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x86 = Debug|x86
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0FE325DA-0947-456D-B99A-43ADC88CE7A0}.Debug|x86.ActiveCfg = Debug|x86
+		{0FE325DA-0947-456D-B99A-43ADC88CE7A0}.Debug|x86.Build.0 = Debug|x86
+		{0FE325DA-0947-456D-B99A-43ADC88CE7A0}.Release|x86.ActiveCfg = Release|x86
+		{0FE325DA-0947-456D-B99A-43ADC88CE7A0}.Release|x86.Build.0 = Release|x86
+		{8AC6C76D-85B8-453C-90AA-793E3C8A5AB7}.Debug|x86.ActiveCfg = Debug|x86
+		{8AC6C76D-85B8-453C-90AA-793E3C8A5AB7}.Debug|x86.Build.0 = Debug|x86
+		{8AC6C76D-85B8-453C-90AA-793E3C8A5AB7}.Release|x86.ActiveCfg = Release|x86
+		{8AC6C76D-85B8-453C-90AA-793E3C8A5AB7}.Release|x86.Build.0 = Release|x86
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {1AD8F473-B95F-466F-84E6-28FB06DE84E5}
+	EndGlobalSection
+EndGlobal
