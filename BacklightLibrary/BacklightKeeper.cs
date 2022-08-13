@@ -1,6 +1,5 @@
 ﻿namespace BacklightLibrary;
 
-
 public sealed class BacklightKeeper
 {
     private readonly Mutex _backlightOpsMutex;
@@ -23,7 +22,7 @@ public sealed class BacklightKeeper
         _backlightOpsMutex = new Mutex(false, "ThinkpadBacklightControlMutex", out var isNew);
         if (!isNew) throw new Exception("Creation of resource lock failed: Mutex already exists.");
         _mainThread = new Thread(MainLoop);
-        _controller.Changed += (_, _) => { AssignTargetState(); };
+        _controller.OnChanged += (_, _) => { AssignTargetState(); };
     }
 
     public BacklightKeeper(ref Backlight controller, BacklightState targetState)
@@ -33,7 +32,7 @@ public sealed class BacklightKeeper
         _backlightOpsMutex = new Mutex(false, "ThinkpadBacklightControlMutex", out var isNew);
         if (!isNew) throw new Exception("Creation of resource lock failed: Mutex already exists.");
         _mainThread = new Thread(MainLoop);
-        controller.Changed += (_, _) => { AssignTargetState(); };
+        controller.OnChanged += (_, _) => { AssignTargetState(); };
     }
 
     /// <summary>
@@ -56,7 +55,7 @@ public sealed class BacklightKeeper
         }
     }
 
-    public event ExceptionEventHandler OnException = (sender, args) => { };
+    public event ExceptionEventHandler OnException;
 
     public void Start()
     {
@@ -107,7 +106,8 @@ public sealed class BacklightKeeper
         catch (Exception ex)
         {
             _backlightOpsMutex.ReleaseMutex();
-            OnException.Invoke(this, new ExceptionEventArgs(ex));
+            var invokeThread = new Thread(() => { OnException.SafeInvoke(this, new ExceptionEventArgs(ex)); });
+            invokeThread.Start();
         }
     }
 }

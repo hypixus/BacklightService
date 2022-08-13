@@ -18,7 +18,7 @@ public class BacklightEventArgs : EventArgs
 
 
 /// <summary>
-///     Event handler for processing a change in backlight state as in <see cref="Backlight.Changed" />
+///     Event handler for processing a change in backlight state as in <see cref="Backlight.OnChanged" />
 /// </summary>
 /// <param name="sender"><see cref="Backlight" /> object responsible for raising the event</param>
 /// <param name="e">Event args containing the new state</param>
