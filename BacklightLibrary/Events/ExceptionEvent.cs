@@ -1,6 +1,4 @@
-﻿using System.Runtime.CompilerServices;
-
-namespace BacklightLibrary;
+﻿namespace BacklightLibrary.Events;
 
 public class ExceptionEventArgs : EventArgs
 {

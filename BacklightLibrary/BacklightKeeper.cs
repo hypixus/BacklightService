@@ -1,4 +1,6 @@
-﻿namespace BacklightLibrary;
+﻿using BacklightLibrary.Events;
+
+namespace BacklightLibrary;
 
 public sealed class BacklightKeeper
 {
@@ -6,6 +8,7 @@ public sealed class BacklightKeeper
     private readonly Backlight _controller;
     private readonly object _exitLoopLock = new();
     private readonly Thread _mainThread;
+    private const string BacklightKeeperMutexName = "ThinkpadBacklightControlMutex";
     private bool _exitLoop;
     private int _loopInterval = 250;
     private BacklightState _targetState;
@@ -13,13 +16,13 @@ public sealed class BacklightKeeper
     /// <summary>
     ///     Create instance of this class consistently forcing a specified keyboard backlight state.
     /// </summary>
-    /// <param name="targetState"></param>
+    /// <param name="targetState">The backlight state which is the target to keep.</param>
     /// <exception cref="Exception"></exception>
     public BacklightKeeper(BacklightState targetState)
     {
         _controller = new Backlight();
         _targetState = targetState;
-        _backlightOpsMutex = new Mutex(false, "ThinkpadBacklightControlMutex", out var isNew);
+        _backlightOpsMutex = new Mutex(false, BacklightKeeperMutexName, out var isNew);
         if (!isNew) throw new Exception("Creation of resource lock failed: Mutex already exists.");
         _mainThread = new Thread(MainLoop);
         _controller.OnChanged += (_, _) => { AssignTargetState(); };
@@ -29,7 +32,7 @@ public sealed class BacklightKeeper
     {
         _controller = controller;
         _targetState = targetState;
-        _backlightOpsMutex = new Mutex(false, "ThinkpadBacklightControlMutex", out var isNew);
+        _backlightOpsMutex = new Mutex(false, BacklightKeeperMutexName, out var isNew);
         if (!isNew) throw new Exception("Creation of resource lock failed: Mutex already exists.");
         _mainThread = new Thread(MainLoop);
         controller.OnChanged += (_, _) => { AssignTargetState(); };
@@ -55,7 +58,7 @@ public sealed class BacklightKeeper
         }
     }
 
-    public event ExceptionEventHandler OnException;
+    public event ExceptionEventHandler? OnException;
 
     public void Start()
     {

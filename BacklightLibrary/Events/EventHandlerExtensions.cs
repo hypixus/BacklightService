@@ -1,4 +1,4 @@
-﻿namespace BacklightLibrary;
+﻿namespace BacklightLibrary.Events;
 
 public static class EventHandlerExtensions
 {

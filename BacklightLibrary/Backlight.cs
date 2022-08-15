@@ -20,6 +20,7 @@
 // ReSharper disable UnusedType.Global
 
 using System.Runtime.InteropServices;
+using BacklightLibrary.Events;
 using Microsoft.Win32;
 
 namespace BacklightLibrary;
@@ -29,17 +30,18 @@ namespace BacklightLibrary;
 /// </summary>
 public class Backlight
 {
+    private const string PmSubKey = @"SYSTEM\CurrentControlSet\Services\IBMPMSVC\Parameters\Notification";
+    private const string BacklightMutexName = "BacklightLibraryInternalMutex";
+    private readonly Mutex _backlightMutex;
     private bool _enabled;
     private Thread _loopThread;
-    private readonly Mutex _backlightMutex;
-    private const string PmSubKey = @"SYSTEM\CurrentControlSet\Services\IBMPMSVC\Parameters\Notification";
 
     /// <summary>
     ///     Create a new instance, automatically queries for <see cref="State" /> and <see cref="Limit" />
     /// </summary>
     public Backlight()
     {
-        _backlightMutex = new Mutex(false, "BacklightLibraryInternalMutex", out var isNewMutex );
+        _backlightMutex = new Mutex(false, BacklightMutexName, out var isNewMutex);
         if (!isNewMutex) throw new Exception("Cannot initialize multiple instances of Backlight class.");
 
         if (!GetKeyboardBackLightStatus(out var status))
@@ -73,9 +75,10 @@ public class Backlight
             }
         }
     }
-
+    
     /// <summary>
-    ///     Get the last known state (ex. 0/1/2) of the backlight recorded by last <see cref="ReadState" /><see cref="ChangeState" />
+    ///     Get the last known state (ex. 0/1/2) of the backlight recorded by last <see cref="ReadState" />
+    ///     <see cref="ChangeState" />
     /// </summary>
     public int State { get; private set; }
 
@@ -90,7 +93,7 @@ public class Backlight
     public event BacklightEventHandler? OnChanged;
 
     /// <summary>
-    /// Raised when an internal exception has occurred.
+    ///     Raised when an internal exception has occurred.
     /// </summary>
     public event ExceptionEventHandler? OnException;
 
@@ -118,9 +121,7 @@ public class Backlight
     {
         State = Clamp(state);
         if (!SetKeyboardBackLightStatus(state))
-        {
             OnException.SafeInvoke(this, new ExceptionEventArgs(new Exception("Error accessing the keyboard driver")));
-        }
     }
 
     /// <summary>
@@ -145,7 +146,7 @@ public class Backlight
         var resultCode = RegNotifyChangeKeyValue(notifyKey.Handle.DangerousGetHandle(), false, 4,
             ev.SafeWaitHandle.DangerousGetHandle(), true);
         if (resultCode != 0)
-            throw new Exception("RegNotifyChangeKeyValue failed");
+            InvokeOnException(new Exception("RegNotifyChangeKeyValue failed with code " + resultCode));
         while (_enabled)
         {
             // ensures the loop does not choke the system.
@@ -160,12 +161,26 @@ public class Backlight
                 InvokeOnException(new Exception("RegNotifyChangeKeyValue failed with code " + resultCode));
                 continue;
             }
+
             // Check notification reason, bit.17 should flip; invoke event on parent thread
             if ((oldValue ^ registryKeyValue) >> 17 != 1) continue;
             InvokeOnChanged(ReadState());
         }
     }
 
+    private static uint GetRegistryKeyValue(RegistryKey notifyKey)
+    {
+        return (uint)(int)(notifyKey.GetValue(null) ?? throw new NullReferenceException());
+    }
+
+    private int Clamp(int st)
+    {
+        if (st < 0) st = 0;
+        if (st > Limit) st = Limit;
+        return st;
+    }
+
+    #region invokeEvents
     private void InvokeOnException(Exception ex)
     {
         var invokeThread = new Thread(() => OnException.SafeInvoke(this, new ExceptionEventArgs(ex)));
@@ -177,18 +192,10 @@ public class Backlight
         var invokeThread = new Thread(() => OnChanged.SafeInvoke(this, new BacklightEventArgs(state)));
         invokeThread.Start();
     }
-
-    private static uint GetRegistryKeyValue(RegistryKey notifyKey) =>
-        (uint)(int)(notifyKey.GetValue(null) ?? throw new NullReferenceException());
-
-    private int Clamp(int st)
-    {
-        if (st < 0) st = 0;
-        if (st > Limit) st = Limit;
-        return st;
-    }
+    #endregion
 
     #region backlightCalls
+
     private bool GetKeyboardBackLightStatus(out int status)
     {
         _backlightMutex.WaitOne();
@@ -268,9 +275,11 @@ public class Backlight
             throw new Exception("Error closing handle to PM service");
         return output;
     }
+
     #endregion
 
     #region externs
+
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
     private static extern IntPtr CreateFile(string lpFileName, uint dwDesiredAccess, uint dwShareMode,
         IntPtr lpSecurityAttributes, uint dwCreationDisposition, uint dwFlagsAndAttributes, IntPtr hTemplateFile);
@@ -289,5 +298,6 @@ public class Backlight
     [DllImport("advapi32.dll", SetLastError = true)]
     private static extern int RegNotifyChangeKeyValue(IntPtr hKey, bool watchSubtree, uint notifyFilter,
         IntPtr hEvent, bool asynchronous);
+
     #endregion
 }
