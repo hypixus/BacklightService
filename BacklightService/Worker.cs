@@ -1,40 +1,52 @@
-namespace BacklightService
+using BacklightLibrary;
+using BacklightLibrary.Events;
+
+namespace BacklightService;
+
+public class Worker : BackgroundService
 {
-    public sealed class WindowsBackgroundService : BackgroundService
+    private readonly ILogger<Worker> _logger;
+
+    public Worker(ILogger<Worker> logger)
     {
-        private readonly BacklightService _jokeService;
-        private readonly ILogger<WindowsBackgroundService> _logger;
+        _logger = logger;
+    }
 
-        public WindowsBackgroundService(
-            BacklightService jokeService,
-            ILogger<WindowsBackgroundService> logger) =>
-            (_jokeService, _logger) = (jokeService, logger);
-
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            try
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        var args = Environment.GetCommandLineArgs();
+        var targetBrightness = BacklightState.Full;
+        if (args.Length == 1)
+            switch (args[0])
             {
-                while (!stoppingToken.IsCancellationRequested)
-                {
-                    _logger.LogWarning("This do be a warning");
-
-                    await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
-                }
+                case "0":
+                    targetBrightness = BacklightState.Off;
+                    break;
+                case "1":
+                    targetBrightness = BacklightState.Dim;
+                    break;
+                case "2":
+                    targetBrightness = BacklightState.Full;
+                    break;
+                default:
+                    _logger.LogCritical("Provided start parameter is incorrect. Accepted values are [0-2].");
+                    break;
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "{Message}", ex.Message);
+        else _logger.LogCritical("Incorrect number of parameters.");
+        var keeper = new BacklightKeeper(targetBrightness);
+        keeper.OnException += OnKeeperException;
+        keeper.Start();
+        _logger.LogInformation("Reached main loop.");
+        while (!stoppingToken.IsCancellationRequested)
+            //_logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+            await Task.Delay(5000, stoppingToken);
+        _logger.LogInformation("Stopping the keeper.");
+        keeper.Stop();
+        _logger.LogInformation("Stopped. Goodbye!");
+    }
 
-                // Terminates this process and returns an exit code to the operating system.
-                // This is required to avoid the 'BackgroundServiceExceptionBehavior', which
-                // performs one of two scenarios:
-                // 1. When set to "Ignore": will do nothing at all, errors cause zombie services.
-                // 2. When set to "StopHost": will cleanly stop the host, and log errors.
-                //
-                // In order for the Windows Service Management system to leverage configured
-                // recovery options, we need to terminate the process with a non-zero exit code.
-                Environment.Exit(1);
-            }
-        }
+    private void OnKeeperException(object sender, ExceptionEventArgs e)
+    {
+        _logger.LogError(e.Exception, "An exception occurred within BacklightKeeper library.");
     }
 }

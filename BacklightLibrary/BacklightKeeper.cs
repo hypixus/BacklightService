@@ -1,8 +1,10 @@
-﻿namespace BacklightLibrary;
+﻿using BacklightLibrary.Events;
 
+namespace BacklightLibrary;
 
 public sealed class BacklightKeeper
 {
+    private const string BacklightKeeperMutexName = "ThinkpadBacklightControlMutex";
     private readonly Mutex _backlightOpsMutex;
     private readonly Backlight _controller;
     private readonly object _exitLoopLock = new();
@@ -14,26 +16,26 @@ public sealed class BacklightKeeper
     /// <summary>
     ///     Create instance of this class consistently forcing a specified keyboard backlight state.
     /// </summary>
-    /// <param name="targetState"></param>
+    /// <param name="targetState">The backlight state which is the target to keep.</param>
     /// <exception cref="Exception"></exception>
     public BacklightKeeper(BacklightState targetState)
     {
         _controller = new Backlight();
         _targetState = targetState;
-        _backlightOpsMutex = new Mutex(false, "ThinkpadBacklightControlMutex", out var isNew);
+        _backlightOpsMutex = new Mutex(false, BacklightKeeperMutexName, out var isNew);
         if (!isNew) throw new Exception("Creation of resource lock failed: Mutex already exists.");
         _mainThread = new Thread(MainLoop);
-        _controller.Changed += (_, _) => { AssignTargetState(); };
+        _controller.OnChanged += (_, _) => { AssignTargetState(); };
     }
 
     public BacklightKeeper(ref Backlight controller, BacklightState targetState)
     {
         _controller = controller;
         _targetState = targetState;
-        _backlightOpsMutex = new Mutex(false, "ThinkpadBacklightControlMutex", out var isNew);
+        _backlightOpsMutex = new Mutex(false, BacklightKeeperMutexName, out var isNew);
         if (!isNew) throw new Exception("Creation of resource lock failed: Mutex already exists.");
         _mainThread = new Thread(MainLoop);
-        controller.Changed += (_, _) => { AssignTargetState(); };
+        controller.OnChanged += (_, _) => { AssignTargetState(); };
     }
 
     /// <summary>
@@ -56,7 +58,7 @@ public sealed class BacklightKeeper
         }
     }
 
-    public event ExceptionEventHandler OnException = (sender, args) => { };
+    public event ExceptionEventHandler? OnException;
 
     public void Start()
     {
@@ -107,7 +109,8 @@ public sealed class BacklightKeeper
         catch (Exception ex)
         {
             _backlightOpsMutex.ReleaseMutex();
-            OnException.Invoke(this, new ExceptionEventArgs(ex));
+            var invokeThread = new Thread(() => { OnException.SafeInvoke(this, new ExceptionEventArgs(ex)); });
+            invokeThread.Start();
         }
     }
 }

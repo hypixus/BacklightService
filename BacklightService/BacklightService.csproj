@@ -1,24 +1,28 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Worker">
 
 	<PropertyGroup>
-		<TargetFramework>net6.0-windows</TargetFramework>
+		<LangVersion>10</LangVersion>
+		<TargetFramework>net6.0-windows10.0.22000.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
-		<UserSecretsId>dotnet-BacklightService-AECC2478-0A59-4DCD-A87D-3A4040D0538F</UserSecretsId>
-		<OutputType>exe</OutputType>
-		<PublishSingleFile Condition="'$(Configuration)' == 'Release'">true</PublishSingleFile>
-		<RuntimeIdentifier>win-x86</RuntimeIdentifier>
-		<PlatformTarget>x86</PlatformTarget>
-		<Platforms>AnyCPU;x86</Platforms>
+		<UserSecretsId>dotnet-BacklightService-F02DDC23-92A3-4E74-ACFF-5214CD8FB37F</UserSecretsId>
+		<Platforms>x86</Platforms>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
+		<WarningLevel>7</WarningLevel>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'">
+		<WarningLevel>7</WarningLevel>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<PackageReference Include="Microsoft.Extensions.Hosting" Version="6.0.1" />
 		<PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="6.0.0" />
-		<PackageReference Include="Microsoft.Extensions.Http" Version="6.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\BacklightLibrary\BacklightLibrary.csproj" />
+		<ProjectReference Include="..\BacklightLibrary\BacklightLibrary.csproj" />
 	</ItemGroup>
 </Project>

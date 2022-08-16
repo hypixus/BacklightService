@@ -20,6 +20,7 @@
 // ReSharper disable UnusedType.Global
 
 using System.Runtime.InteropServices;
+using BacklightLibrary.Events;
 using Microsoft.Win32;
 
 namespace BacklightLibrary;
@@ -29,16 +30,21 @@ namespace BacklightLibrary;
 /// </summary>
 public class Backlight
 {
-    private readonly EventWaitHandle _finish;
+    private const string PmSubKey = @"SYSTEM\CurrentControlSet\Services\IBMPMSVC\Parameters\Notification";
+    private const string BacklightMutexName = "BacklightLibraryInternalMutex";
+    private readonly Mutex _backlightMutex;
     private bool _enabled;
     private Thread _loopThread;
-    private readonly Mutex _backlightMutex;
 
     /// <summary>
-    ///     Create a new instance, automatically queries for <see cref="State" /> and <see cref="Limit" />
+    /// Create a new instance, automatically queries for <see cref="State" /> and <see cref="Limit" />
     /// </summary>
+    /// <exception cref="Exception">Cannot create multiple instances/driver access error.</exception>
     public Backlight()
     {
+        _backlightMutex = new Mutex(false, BacklightMutexName, out var isNewMutex);
+        if (!isNewMutex) throw new Exception("Cannot initialize multiple instances of Backlight class.");
+
         if (!GetKeyboardBackLightStatus(out var status))
             throw new Exception("Error accessing Keyboard driver");
         if (!GetKeyboardBackLightLevel(out var limit))
@@ -46,13 +52,7 @@ public class Backlight
         State = status;
         Limit = limit;
 
-        // Background monitor thread setup
-        _finish = new EventWaitHandle(false, EventResetMode.ManualReset);
-
         _loopThread = new Thread(MonitorThread);
-        Changed = (_, _) => { };
-        _backlightMutex = new Mutex(false, "BacklightLibraryInternalMutex", out var isNewMutex );
-        if (!isNewMutex) throw new Exception("Cannot initialize multiple instances of Backlight class.");
     }
 
     /// <summary>
@@ -67,20 +67,19 @@ public class Backlight
             _enabled = value;
             if (value)
             {
-                _finish.Reset();
                 _loopThread = new Thread(MonitorThread);
                 _loopThread.Start();
             }
             else
             {
-                _finish.Set();
                 _loopThread.Join();
             }
         }
     }
 
     /// <summary>
-    ///     Get the last known state (ex. 0/1/2) of the backlight recorded by last <see cref="ReadState" /><see cref="ChangeState" />
+    ///     Get the last known state (ex. 0/1/2) of the backlight recorded by last <see cref="ReadState" />
+    ///     <see cref="ChangeState" />
     /// </summary>
     public int State { get; private set; }
 
@@ -92,7 +91,12 @@ public class Backlight
     /// <summary>
     ///     Raised when the backlight state has been changed by keyboard or by <see cref="ChangeState" />
     /// </summary>
-    public event BacklightEventHandler Changed;
+    public event BacklightEventHandler? OnChanged;
+
+    /// <summary>
+    ///     Raised when an internal exception has occurred.
+    /// </summary>
+    public event ExceptionEventHandler? OnException;
 
     /// <summary>
     ///     Begin background processing
@@ -118,8 +122,7 @@ public class Backlight
     {
         State = Clamp(state);
         if (!SetKeyboardBackLightStatus(state))
-            throw new Exception("Error accessing Keyboard driver");
-        //while (!SetKeyboardBackLightStatus(st)) Thread.Sleep(1000);
+            OnException.SafeInvoke(this, new ExceptionEventArgs(new Exception("Error accessing the keyboard driver")));
     }
 
     /// <summary>
@@ -137,55 +140,46 @@ public class Backlight
     private void MonitorThread()
     {
         using var ev = new EventWaitHandle(false, EventResetMode.AutoReset);
-        using var notifyKey =
-            Registry.LocalMachine.OpenSubKey(
-                @"SYSTEM\CurrentControlSet\Services\IBMPMSVC\Parameters\Notification");
+        using var notifyKey = Registry.LocalMachine.OpenSubKey(PmSubKey);
         if (notifyKey == null) return;
-        uint registryKeyValue;
-        try
-        {
-            registryKeyValue = (uint)(int)(notifyKey.GetValue(null) ?? throw new NullReferenceException());
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e);
-            Thread.Sleep(250);
-            return;
-        }
 
-        var ret = RegNotifyChangeKeyValue(notifyKey.Handle.DangerousGetHandle(), false, 4,
+        var registryKeyValue = GetRegistryKeyValue(notifyKey);
+        var resultCode = RegNotifyChangeKeyValue(notifyKey.Handle.DangerousGetHandle(), false, 4,
             ev.SafeWaitHandle.DangerousGetHandle(), true);
-        if (ret != 0)
-            throw new Exception("RegNotifyChangeKeyValue failed");
-
-        while (true)
+        if (resultCode != 0)
+            InvokeOnException(new Exception("RegNotifyChangeKeyValue failed with code " + resultCode));
+        while (_enabled)
         {
-            var which = WaitHandle.WaitAny(new WaitHandle[] { ev, _finish });
-            if (which == 1) break;
-
+            // ensures the loop does not choke the system.
+            Thread.Sleep(250);
             // Capture value, re-register for notification event
             var oldValue = registryKeyValue;
-            try
+            registryKeyValue = GetRegistryKeyValue(notifyKey);
+            resultCode = RegNotifyChangeKeyValue(notifyKey.Handle.DangerousGetHandle(), false, 4,
+                ev.SafeWaitHandle.DangerousGetHandle(), true);
+            if (resultCode != 0)
             {
-                registryKeyValue = (uint)(int)(notifyKey.GetValue(null) ?? throw new NullReferenceException());
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-                Thread.Sleep(250);
+                InvokeOnException(new Exception("RegNotifyChangeKeyValue failed with code " + resultCode));
                 continue;
             }
 
-            ret = RegNotifyChangeKeyValue(notifyKey.Handle.DangerousGetHandle(), false, 4,
-                ev.SafeWaitHandle.DangerousGetHandle(), true);
-            if (ret != 0)
-                throw new Exception("RegNotifyChangeKeyValue failed");
-
             // Check notification reason, bit.17 should flip; invoke event on parent thread
             if ((oldValue ^ registryKeyValue) >> 17 != 1) continue;
-            var thread = new Thread(() => Changed.Invoke(this, new BacklightEventArgs(ReadState())));
-            thread.Start();
+            try
+            {
+                var currentState = ReadState();
+                InvokeOnChanged(currentState);
+            }
+            catch (Exception ex)
+            {
+                InvokeOnException(ex);
+            }
         }
+    }
+
+    private static uint GetRegistryKeyValue(RegistryKey notifyKey)
+    {
+        return (uint)(int)(notifyKey.GetValue(null) ?? throw new NullReferenceException());
     }
 
     private int Clamp(int st)
@@ -194,6 +188,24 @@ public class Backlight
         if (st > Limit) st = Limit;
         return st;
     }
+
+    #region invokeEvents
+
+    private void InvokeOnException(Exception ex)
+    {
+        var invokeThread = new Thread(() => OnException.SafeInvoke(this, new ExceptionEventArgs(ex)));
+        invokeThread.Start();
+    }
+
+    private void InvokeOnChanged(int state)
+    {
+        var invokeThread = new Thread(() => OnChanged.SafeInvoke(this, new BacklightEventArgs(state)));
+        invokeThread.Start();
+    }
+
+    #endregion
+
+    #region backlightCalls
 
     private bool GetKeyboardBackLightStatus(out int status)
     {
@@ -274,8 +286,11 @@ public class Backlight
             throw new Exception("Error closing handle to PM service");
         return output;
     }
-    
+
+    #endregion
+
     #region externs
+
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
     private static extern IntPtr CreateFile(string lpFileName, uint dwDesiredAccess, uint dwShareMode,
         IntPtr lpSecurityAttributes, uint dwCreationDisposition, uint dwFlagsAndAttributes, IntPtr hTemplateFile);
@@ -294,5 +309,6 @@ public class Backlight
     [DllImport("advapi32.dll", SetLastError = true)]
     private static extern int RegNotifyChangeKeyValue(IntPtr hKey, bool watchSubtree, uint notifyFilter,
         IntPtr hEvent, bool asynchronous);
+
     #endregion
 }
