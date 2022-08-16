@@ -7,12 +7,9 @@ A very simple windows service utilizing work of [pspatel321](https://github.com/
 ## What is under the hood?
 
 Entirety of the solution relies on 3 projects.
-- BacklightLibrary
-  This is where actual wrapping of system calls happens. Everything relies on BacklightKeeper class, which after instantiation should be capable of safely accessing the system resources. Changes made to original [Backlight.cs](https://github.com/pspatel321/auto-backlight-for-thinkpad/blob/master/Auto%20Backlight%20for%20ThinkPad/Backlight.cs) include - but are not limited to - better thread safety, refactorization, and change of naming conventions.
-- BacklightService
-  An extremely simple windows service that instantiates BacklightKeeper class and reports any errors occurring. One parameter that can be given before runtime is the backlight level (0-2), by default being 2.
-- BacklightPlayground
-  Basic console application to test functionality of the library. As the name suggests, its just a sandbox to test library out - I highly recommend doing so before actually installing the service.
+- **BacklightLibrary** - This is where actual wrapping of system calls happens. Everything relies on BacklightKeeper class, which after instantiation should be capable of safely accessing the system resources. Changes made to original [Backlight.cs](https://github.com/pspatel321/auto-backlight-for-thinkpad/blob/master/Auto%20Backlight%20for%20ThinkPad/Backlight.cs) include - but are not limited to - better thread safety, refactorization, and change of naming conventions.
+- **BacklightService** - An extremely simple windows service that instantiates BacklightKeeper class and reports any errors occurring. One parameter that can be given before runtime is the backlight level (0-2), by default being 2.
+- **BacklightPlayground** - Basic console application to test functionality of the library. As the name suggests, its just a sandbox to test library out - I highly recommend doing so before actually installing the service.
 
 ## Installation
   For now it is manual by typing one command in the terminal, future installation scripts are in the plan.
