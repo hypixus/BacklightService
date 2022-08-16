@@ -37,8 +37,9 @@ public class Backlight
     private Thread _loopThread;
 
     /// <summary>
-    ///     Create a new instance, automatically queries for <see cref="State" /> and <see cref="Limit" />
+    /// Create a new instance, automatically queries for <see cref="State" /> and <see cref="Limit" />
     /// </summary>
+    /// <exception cref="Exception">Cannot create multiple instances/driver access error.</exception>
     public Backlight()
     {
         _backlightMutex = new Mutex(false, BacklightMutexName, out var isNewMutex);
@@ -75,7 +76,7 @@ public class Backlight
             }
         }
     }
-    
+
     /// <summary>
     ///     Get the last known state (ex. 0/1/2) of the backlight recorded by last <see cref="ReadState" />
     ///     <see cref="ChangeState" />
@@ -164,7 +165,15 @@ public class Backlight
 
             // Check notification reason, bit.17 should flip; invoke event on parent thread
             if ((oldValue ^ registryKeyValue) >> 17 != 1) continue;
-            InvokeOnChanged(ReadState());
+            try
+            {
+                var currentState = ReadState();
+                InvokeOnChanged(currentState);
+            }
+            catch (Exception ex)
+            {
+                InvokeOnException(ex);
+            }
         }
     }
 
@@ -181,6 +190,7 @@ public class Backlight
     }
 
     #region invokeEvents
+
     private void InvokeOnException(Exception ex)
     {
         var invokeThread = new Thread(() => OnException.SafeInvoke(this, new ExceptionEventArgs(ex)));
@@ -192,6 +202,7 @@ public class Backlight
         var invokeThread = new Thread(() => OnChanged.SafeInvoke(this, new BacklightEventArgs(state)));
         invokeThread.Start();
     }
+
     #endregion
 
     #region backlightCalls

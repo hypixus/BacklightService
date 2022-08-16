@@ -4,11 +4,11 @@ namespace BacklightLibrary;
 
 public sealed class BacklightKeeper
 {
+    private const string BacklightKeeperMutexName = "ThinkpadBacklightControlMutex";
     private readonly Mutex _backlightOpsMutex;
     private readonly Backlight _controller;
     private readonly object _exitLoopLock = new();
     private readonly Thread _mainThread;
-    private const string BacklightKeeperMutexName = "ThinkpadBacklightControlMutex";
     private bool _exitLoop;
     private int _loopInterval = 250;
     private BacklightState _targetState;
