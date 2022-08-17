@@ -33,6 +33,7 @@ public class Worker : BackgroundService
                     break;
             }
         else _logger.LogCritical("Incorrect number of parameters.");
+
         var keeper = new BacklightKeeper(targetBrightness);
         keeper.OnException += OnKeeperException;
         keeper.Start();
