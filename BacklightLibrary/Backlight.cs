@@ -33,14 +33,15 @@ public class Backlight
     private const string PmSubKey = @"SYSTEM\CurrentControlSet\Services\IBMPMSVC\Parameters\Notification";
     private const string BacklightMutexName = "BacklightLibraryInternalMutex";
     private readonly Mutex _backlightMutex;
+    private readonly int _eventLoopInterval;
     private bool _enabled;
     private Thread _loopThread;
 
     /// <summary>
-    /// Create a new instance, automatically queries for <see cref="State" /> and <see cref="Limit" />
+    ///     Create a new instance, automatically queries for <see cref="State" /> and <see cref="Limit" />
     /// </summary>
     /// <exception cref="Exception">Cannot create multiple instances/driver access error.</exception>
-    public Backlight()
+    public Backlight(int eventLoopInterval)
     {
         _backlightMutex = new Mutex(false, BacklightMutexName, out var isNewMutex);
         if (!isNewMutex) throw new Exception("Cannot initialize multiple instances of Backlight class.");
@@ -51,7 +52,7 @@ public class Backlight
             throw new Exception("Error accessing Keyboard driver");
         State = status;
         Limit = limit;
-
+        _eventLoopInterval = eventLoopInterval;
         _loopThread = new Thread(MonitorThread);
     }
 
@@ -151,7 +152,7 @@ public class Backlight
         while (_enabled)
         {
             // ensures the loop does not choke the system.
-            Thread.Sleep(250);
+            Thread.Sleep(_eventLoopInterval);
             // Capture value, re-register for notification event
             var oldValue = registryKeyValue;
             registryKeyValue = GetRegistryKeyValue(notifyKey);
